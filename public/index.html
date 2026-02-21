@@ -7,6 +7,7 @@
 <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>html,body,#root{margin:0;padding:0;height:100%;width:100%;overflow:hidden}</style>
 </head>
 <body>
@@ -20,12 +21,10 @@ const LOGO_AVATAR = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUD
 
 const SYSTEM_PROMPT_BASE = `You are Realty AI, a premium real estate assistant.
 
-REGISTRATION FLOW:
-- Before helping, you MUST register the user.
-- Ask for email address first to check previous registrations.
-- If they provide an email, greet them and grant access.
-- If new, ask Full Name then Email Address.
-- Once provided, confirm: "Welcome to Realty AI! How can I help you find your perfect property?"
+USER STATUS:
+- The user is already verified and authenticated. Do NOT ask for email or registration.
+- Jump straight to helping them with real estate searches.
+- Be friendly and professional. Address them by name if provided.
 
 SEARCH BEHAVIOR — CRITICAL:
 You MUST construct REAL working search URLs. NEVER invent or fabricate individual property listing URLs.
@@ -606,23 +605,287 @@ function VoiceBtn({ onResult, onError, disabled }) {
 /* ─── Main App ─────────────────────────────────── */
 const WELCOME = {
   role: 'assistant',
-  content: '**Welcome to Realty AI** 🏠\n\nI\'m your intelligent real estate assistant, ready to help you find your perfect property with real-time market data and AI-powered insights.\n\n🎙️ **Voice Search Enabled** — tap the microphone to search by voice!\n\nTo get started, **please enter your email address** below.'
+  content: '**Welcome to Realty AI** 🏠\n\nI\'m your intelligent real estate assistant, ready to help you find your perfect property with real-time market data and AI-powered insights.\n\n🎙️ **Voice Search Enabled** — tap the microphone to search by voice!\n\nHow can I help you find your perfect property today?'
 };
 
+/* ─── EmailJS Config ─── */
+const EMAILJS_SERVICE_ID = 'service_bz7r4fb';
+const EMAILJS_TEMPLATE_ID = 'template_3peiudc';
+const EMAILJS_PUBLIC_KEY = 'gvXFv0nfSon2_uChv';
+
+/* ─── User Storage Helpers ─── */
+function getRegisteredUsers() {
+  try { return JSON.parse(localStorage.getItem('realty_ai_users') || '{}'); } catch { return {}; }
+}
+function saveUser(email, firstName, lastName) {
+  const users = getRegisteredUsers();
+  users[email.toLowerCase()] = { firstName, lastName, email, registeredAt: new Date().toISOString() };
+  localStorage.setItem('realty_ai_users', JSON.stringify(users));
+}
+function isUserRegistered(email) {
+  const users = getRegisteredUsers();
+  return !!users[email.toLowerCase()];
+}
+function getUserName(email) {
+  const users = getRegisteredUsers();
+  const u = users[email.toLowerCase()];
+  return u ? u.firstName : null;
+}
+function generateCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+/* ─── Auth Screen Component ─── */
+function AuthScreen({ onVerified }) {
+  const [step, setStep] = useState('email'); // email | register | consent | verify
+  const [email, setEmail] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [code, setCode] = useState('');
+  const [sentCode, setSentCode] = useState('');
+  const [error, setError] = useState('');
+  const [sending, setSending] = useState(false);
+  const [consentChecked, setConsentChecked] = useState(false);
+  const codeRefs = [useRef(), useRef(), useRef(), useRef(), useRef(), useRef()];
+  const [codeDigits, setCodeDigits] = useState(['','','','','','']);
+
+  const handleEmailSubmit = (e) => {
+    e.preventDefault();
+    setError('');
+    const em = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+    if (isUserRegistered(em)) {
+      // Existing user — send verification code
+      const c = generateCode();
+      setSentCode(c);
+      sendVerificationEmail(em, getUserName(em) || 'User', c);
+      setStep('verify');
+    } else {
+      // New user — collect name
+      setStep('register');
+    }
+  };
+
+  const handleRegisterSubmit = (e) => {
+    e.preventDefault();
+    setError('');
+    if (!firstName.trim()) { setError('Please enter your first name'); return; }
+    if (!lastName.trim()) { setError('Please enter your last name'); return; }
+    setStep('consent');
+  };
+
+  const handleConsentAgree = () => {
+    if (!consentChecked) return;
+    // Save user and send code
+    saveUser(email.trim(), firstName.trim(), lastName.trim());
+    const c = generateCode();
+    setSentCode(c);
+    sendVerificationEmail(email.trim(), firstName.trim(), c);
+    setStep('verify');
+  };
+
+  const sendVerificationEmail = async (toEmail, toName, verCode) => {
+    setSending(true);
+    setError('');
+    try {
+      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+        to_email: toEmail,
+        to_name: toName,
+        verification_code: verCode,
+        from_name: 'Realty AI',
+        message: 'Your Realty AI verification code is: ' + verCode,
+      }, EMAILJS_PUBLIC_KEY);
+      setSending(false);
+    } catch (err) {
+      console.error('EmailJS error:', err);
+      setSending(false);
+      setError('Failed to send verification email. Please try again.');
+    }
+  };
+
+  const handleCodeInput = (idx, value) => {
+    if (!/^[0-9]?$/.test(value)) return;
+    const nd = [...codeDigits];
+    nd[idx] = value;
+    setCodeDigits(nd);
+    setError('');
+    // Auto-focus next
+    if (value && idx < 5) {
+      codeRefs[idx + 1].current?.focus();
+    }
+    // Check if complete
+    const full = nd.join('');
+    if (full.length === 6) {
+      if (full === sentCode) {
+        onVerified(email.trim(), getUserName(email.trim()) || firstName.trim());
+      } else {
+        setError('Invalid code. Please try again.');
+        setCodeDigits(['','','','','','']);
+        setTimeout(() => codeRefs[0].current?.focus(), 100);
+      }
+    }
+  };
+
+  const handleCodeKeyDown = (idx, e) => {
+    if (e.key === 'Backspace' && !codeDigits[idx] && idx > 0) {
+      codeRefs[idx - 1].current?.focus();
+    }
+  };
+
+  const handleCodePaste = (e) => {
+    const paste = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (paste.length === 6) {
+      const nd = paste.split('');
+      setCodeDigits(nd);
+      codeRefs[5].current?.focus();
+      if (paste === sentCode) {
+        setTimeout(() => onVerified(email.trim(), getUserName(email.trim()) || firstName.trim()), 300);
+      } else {
+        setError('Invalid code. Please try again.');
+      }
+    }
+  };
+
+  const resendCode = () => {
+    const c = generateCode();
+    setSentCode(c);
+    setCodeDigits(['','','','','','']);
+    setError('');
+    sendVerificationEmail(email.trim(), getUserName(email.trim()) || firstName.trim(), c);
+  };
+
+  return (
+    <div className="auth-overlay">
+      <div className="auth-modal">
+        <div className="auth-header">
+          <div className="auth-logo-ring">
+            <img src={LOGO_HEADER} alt="" className="auth-logo" />
+          </div>
+          <h2 className="auth-title">
+            {step === 'email' && 'Welcome to Realty AI'}
+            {step === 'register' && 'Create Your Account'}
+            {step === 'consent' && 'Terms & Consent'}
+            {step === 'verify' && 'Verify Your Email'}
+          </h2>
+          <p className="auth-sub">
+            {step === 'email' && 'Enter your email to get started'}
+            {step === 'register' && 'Tell us a bit about yourself'}
+            {step === 'consent' && 'Please review and agree to continue'}
+            {step === 'verify' && ('We sent a 6-digit code to ' + email)}
+          </p>
+        </div>
+
+        <div className="auth-body">
+          {/* Step 1: Email */}
+          {step === 'email' && (
+            <form onSubmit={handleEmailSubmit}>
+              <div className="auth-field">
+                <label>Email Address</label>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" autoFocus autoComplete="email" />
+              </div>
+              {error && <div className="auth-error">{error}</div>}
+              <button type="submit" className="auth-submit">Continue</button>
+            </form>
+          )}
+
+          {/* Step 2: Register (First Name, Last Name) */}
+          {step === 'register' && (
+            <form onSubmit={handleRegisterSubmit}>
+              <div className="auth-field">
+                <label>First Name</label>
+                <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="First name" autoFocus autoComplete="given-name" />
+              </div>
+              <div className="auth-field">
+                <label>Last Name</label>
+                <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Last name" autoComplete="family-name" />
+              </div>
+              <div className="auth-field">
+                <label>Email Address</label>
+                <input type="email" value={email} disabled className="auth-disabled" />
+              </div>
+              {error && <div className="auth-error">{error}</div>}
+              <button type="submit" className="auth-submit">Continue</button>
+              <button type="button" className="auth-back" onClick={() => setStep('email')}>← Back</button>
+            </form>
+          )}
+
+          {/* Step 3: Consent */}
+          {step === 'consent' && (
+            <div>
+              <div className="consent-check-row" onClick={() => setConsentChecked(c => !c)}>
+                <div className={'consent-checkbox ' + (consentChecked ? 'checked' : '')}>
+                  {consentChecked && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                </div>
+                <p className="consent-text">
+                  By checking this box, I agree by electronic signature to the{' '}
+                  <span className="consent-link" onClick={e => { e.stopPropagation(); openLink('https://nationrealtor.axenrealty.com/site/electronic-disclosure-consent'); }}>Electronic Disclosure Consent Agreement</span>
+                  ; to receive recurring marketing communication from or on behalf of{' '}
+                  <strong>Giancarlo DiFazio</strong>, including auto-dialed calls, texts, and artificial/prerecorded voice messages
+                  (message frequency varies; data rates may apply; reply "STOP" to opt-out of texts or "HELP" for assistance); and to the{' '}
+                  <span className="consent-link" onClick={e => { e.stopPropagation(); openLink('https://nationrealtor.axenrealty.com/site/privacy-terms#terms-of-service'); }}>Terms of Service</span> and{' '}
+                  <span className="consent-link" onClick={e => { e.stopPropagation(); openLink('https://nationrealtor.axenrealty.com/site/privacy-terms#privacy-policy'); }}>Privacy Policy</span>{' '}
+                  of this website. Consent not required to make a purchase. I understand that I can call{' '}
+                  <span className="consent-phone">949-312-0103</span> to obtain direct assistance.
+                </p>
+              </div>
+              {error && <div className="auth-error">{error}</div>}
+              <button className={'auth-submit ' + (consentChecked ? '' : 'disabled')} disabled={!consentChecked} onClick={handleConsentAgree}>
+                {sending ? <span className="send-spin" style={{width:16,height:16,marginRight:8}} /> : null}
+                Agree & Send Verification Code
+              </button>
+              <button className="auth-back" onClick={() => setStep('register')}>← Back</button>
+            </div>
+          )}
+
+          {/* Step 4: 6-digit Code Verification */}
+          {step === 'verify' && (
+            <div>
+              <div className="auth-code-row" onPaste={handleCodePaste}>
+                {codeDigits.map((d, i) => (
+                  <input
+                    key={i}
+                    ref={codeRefs[i]}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={d}
+                    onChange={e => handleCodeInput(i, e.target.value)}
+                    onKeyDown={e => handleCodeKeyDown(i, e)}
+                    className="auth-code-input"
+                    autoFocus={i === 0}
+                  />
+                ))}
+              </div>
+              {sending && <div className="auth-sending">📧 Sending code...</div>}
+              {error && <div className="auth-error">{error}</div>}
+              <button className="auth-resend" onClick={resendCode} disabled={sending}>
+                Didn't receive a code? Resend
+              </button>
+              <button className="auth-back" onClick={() => { setStep('email'); setCodeDigits(['','','','','','']); setError(''); }}>← Start over</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RealtyAI() {
-  const [screen, setScreen] = useState('splash');
+  const [screen, setScreen] = useState('splash'); // splash | auth | chat
   const [msgs, setMsgs] = useState([]);
   const [inp, setInp] = useState('');
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState({ show: false, msg: '' });
   const [attachments, setAttachments] = useState([]);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
-  const [reg, setReg] = useState(false);
-  const [showConsent, setShowConsent] = useState(false);
+  const [reg, setReg] = useState(true); // Always true after auth
   const [mortgageRate, setMortgageRate] = useState(null);
   const [rateDate, setRateDate] = useState('');
-  const [consentChecked, setConsentChecked] = useState(false);
-  const [pendingEmail, setPendingEmail] = useState('');
+  const [userName, setUserName] = useState('');
+  const [userEmail, setUserEmail] = useState('');
   const endRef = useRef(null);
   const inpRef = useRef(null);
   const textRef = useRef(null);
@@ -663,54 +926,9 @@ function RealtyAI() {
   }, []);
 
   const newChat = useCallback(() => {
-    setMsgs([WELCOME]); setReg(false); setShowConsent(false); setConsentChecked(false); setPendingEmail(''); setInp(''); setAttachments([]);
+    setMsgs([WELCOME]); setInp(''); setAttachments([]);
     showToast('✨ New conversation started');
   }, [showToast]);
-
-  // Handle consent agreement — proceed with email registration
-  const handleConsentAgree = () => {
-    if (!consentChecked) return;
-    setShowConsent(false);
-    // Now send the email through to the AI
-    const email = pendingEmail;
-    setPendingEmail('');
-    setConsentChecked(false);
-    // Proceed with normal send flow
-    (async () => {
-      const currentAtts = [...attachments];
-      setAttachments([]);
-      const userMsg = { role: 'user', content: email, attachments: [] };
-      const nm = [...msgs, userMsg];
-      setMsgs([...nm, { role: 'assistant', content: '', searching: true }]);
-      setBusy(true);
-      const apiMsgs = nm.map(x => {
-        if (x === userMsg) return { role: 'user', content: email };
-        return { role: x.role, content: x.content };
-      });
-      try {
-        const r = await fetch("/.netlify/functions/chat", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-20250514", max_tokens: 4096, system: getSystemPrompt(mortgageRate, rateDate),
-            messages: apiMsgs
-          })
-        });
-        const d = await r.json(); if (!r.ok) throw new Error(d.error || d.details?.error?.message || 'API error ' + r.status);
-        let res = '';
-        if (d.content) {
-          const texts = d.content.filter(x => x.type === 'text').map(x => x.text);
-          res = texts.join('\n');
-        }
-        if (d.error) { res = '⚠️ API Error: ' + (d.error.message || d.error || 'Unknown error'); }
-        if (!res) res = "I'm processing your request. Could you provide more details about what you're looking for?";
-        if (!reg && /welcome to realty|access granted|personalized|how can i help you find/i.test(res)) setReg(true);
-        setMsgs([...nm, { role: 'assistant', content: res }]);
-      } catch(err) {
-        setMsgs([...nm, { role: 'assistant', content: '⚠️ ' + (err.message || 'Connection failed. Please try again.') }]);
-      }
-      setBusy(false);
-    })();
-  };
 
   const handleFiles = (files) => {
     const allowed = ['image/jpeg','image/png','image/gif','image/webp','video/mp4','video/webm','application/pdf'];
@@ -756,13 +974,7 @@ function RealtyAI() {
     if ((!m && attachments.length === 0) || busy) return;
     setInp('');
 
-    // ── Consent popup: show when user enters email for first time ──
-    if (!reg && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m.trim())) {
-      setPendingEmail(m.trim());
-      setConsentChecked(false);
-      setShowConsent(true);
-      return;
-    }
+
 
     // ── Normal chat ──
     const currentAtts = [...attachments];
@@ -820,7 +1032,7 @@ function RealtyAI() {
         }
         if (d.error) { res = '⚠️ API Error: ' + (d.error.message || d.error || 'Unknown error'); }
       if (!res) res = "I'm processing your request. Could you provide more details about what you're looking for?";
-      if (!reg && /welcome to realty|access granted|personalized|how can i help you find/i.test(res)) setReg(true);
+
       setMsgs([...nm, { role: 'assistant', content: res }]);
     } catch(err) {
       setMsgs([...nm, { role: 'assistant', content: '⚠️ ' + (err.message || 'Connection failed. Please try again.') }]);
@@ -829,7 +1041,18 @@ function RealtyAI() {
     setTimeout(() => inpRef.current?.focus(), 100);
   };
 
-  if (screen === 'splash') return <Splash onEnter={() => { setScreen('chat'); setMsgs([WELCOME]); }} />;
+  if (screen === 'splash') return <Splash onEnter={() => setScreen('auth')} />;
+
+  if (screen === 'auth') return <AuthScreen onVerified={(email, name) => {
+    setUserEmail(email);
+    setUserName(name);
+    setReg(true);
+    setScreen('chat');
+    setMsgs([{
+      role: 'assistant',
+      content: '**Welcome back, ' + name + '!** 🏠\n\nI\'m your intelligent real estate assistant, ready to help you find your perfect property with real-time market data and AI-powered insights.\n\n🎙️ **Voice Search Enabled** — tap the microphone to search by voice!\n\nHow can I help you find your perfect property today?'
+    }]);
+  }} />;
 
   return (
     <div className="app">
@@ -922,7 +1145,7 @@ function RealtyAI() {
             onChange={e => setInp(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
             onFocus={() => setShowAttachMenu(false)}
-            placeholder={reg ? "Search properties, market data, mortgage..." : "Enter your email to get started..."}
+            placeholder="Search properties, market data, mortgage..."
             rows={1}
             disabled={busy}
           />
@@ -940,46 +1163,6 @@ function RealtyAI() {
       {showAttachMenu && <div className="attach-overlay" onClick={() => setShowAttachMenu(false)} />}
 
       <Toast msg={toast.msg} visible={toast.show} />
-
-      {/* ── Consent Modal ── */}
-      {showConsent && (
-        <div className="consent-overlay" onClick={() => setShowConsent(false)}>
-          <div className="consent-modal" onClick={e => e.stopPropagation()}>
-            <div className="consent-header">
-              <div className="consent-logo-ring">
-                <img src={LOGO_HEADER} alt="" className="consent-logo" />
-              </div>
-              <h2 className="consent-title">Terms & Consent</h2>
-              <p className="consent-sub">Please review and agree to continue</p>
-            </div>
-            <div className="consent-body">
-              <div className="consent-check-row" onClick={() => setConsentChecked(c => !c)}>
-                <div className={`consent-checkbox ${consentChecked ? 'checked' : ''}`}>
-                  {consentChecked && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
-                </div>
-                <p className="consent-text">
-                  By checking this box, I agree by electronic signature to the{' '}
-                  <span className="consent-link" onClick={e => { e.stopPropagation(); openLink('https://nationrealtor.axenrealty.com/site/electronic-disclosure-consent'); }}>Electronic Disclosure Consent Agreement</span>
-                  ; to receive recurring marketing communication from or on behalf of{' '}
-                  <strong>Giancarlo DiFazio</strong>, including auto-dialed calls, texts, and artificial/prerecorded voice messages
-                  (message frequency varies; data rates may apply; reply "STOP" to opt-out of texts or "HELP" for assistance); and to the{' '}
-                  <span className="consent-link" onClick={e => { e.stopPropagation(); openLink('https://nationrealtor.axenrealty.com/site/privacy-terms#terms-of-service'); }}>Terms of Service</span> and{' '}
-                  <span className="consent-link" onClick={e => { e.stopPropagation(); openLink('https://nationrealtor.axenrealty.com/site/privacy-terms#privacy-policy'); }}>Privacy Policy</span>{' '}
-                  of this website. Consent not required to make a purchase. I understand that I can call{' '}
-                  <span className="consent-phone">949-312-0103</span> to obtain direct assistance.
-                </p>
-              </div>
-            </div>
-            <div className="consent-actions">
-              <button className="consent-btn cancel" onClick={() => { setShowConsent(false); setPendingEmail(''); }}>Cancel</button>
-              <button className={`consent-btn agree ${consentChecked ? 'active' : ''}`} disabled={!consentChecked} onClick={handleConsentAgree}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-                Agree & Continue
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <style>{`
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
@@ -1254,6 +1437,37 @@ function RealtyAI() {
 .search-banner-domain{font-size:11px;color:var(--t500);margin-top:1px}
 .search-banner svg{color:var(--g400);flex-shrink:0}
 
+
+/* ── Auth Screen ───────────────────── */
+.auth-overlay{position:fixed;inset:0;background:var(--d950);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
+.auth-modal{background:var(--d900);border:1px solid rgba(255,255,255,.08);border-radius:24px;max-width:440px;width:100%;box-shadow:0 24px 80px rgba(0,0,0,.6),0 0 0 1px rgba(34,197,94,.08);animation:modalIn .4s cubic-bezier(.4,0,.2,1);overflow:hidden}
+.auth-header{padding:32px 32px 0;text-align:center}
+.auth-logo-ring{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--g700),var(--g500));display:flex;align-items:center;justify-content:center;margin:0 auto 16px;box-shadow:0 0 32px rgba(34,197,94,.25)}
+.auth-logo{width:42px;height:42px;border-radius:50%;object-fit:cover}
+.auth-title{font-family:var(--serif);font-size:24px;font-weight:600;color:var(--t100);letter-spacing:.5px}
+.auth-sub{font-size:13px;color:var(--t400);margin-top:6px;font-weight:400;line-height:1.5}
+.auth-body{padding:24px 32px 32px}
+.auth-field{margin-bottom:16px}
+.auth-field label{display:block;font-size:12px;font-weight:600;color:var(--t400);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
+.auth-field input{width:100%;padding:12px 16px;background:var(--d800);border:1.5px solid rgba(255,255,255,.08);border-radius:12px;color:var(--t100);font-family:var(--sans);font-size:15px;outline:none;transition:all .2s}
+.auth-field input:focus{border-color:rgba(34,197,94,.3);box-shadow:0 0 0 3px rgba(34,197,94,.08)}
+.auth-field input::placeholder{color:var(--t500)}
+.auth-disabled{opacity:.6;cursor:not-allowed}
+.auth-error{padding:10px 14px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.15);border-radius:10px;color:#f87171;font-size:13px;font-weight:500;margin-bottom:14px;animation:msg-in .2s ease}
+.auth-submit{width:100%;padding:14px;background:linear-gradient(135deg,var(--g500),var(--g600));color:#fff;border:none;border-radius:12px;font-family:var(--sans);font-size:15px;font-weight:600;cursor:pointer;transition:all .2s;box-shadow:0 4px 16px rgba(22,163,74,.25);display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px}
+.auth-submit:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 24px rgba(22,163,74,.4)}
+.auth-submit.disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
+.auth-submit:disabled{opacity:.4;cursor:not-allowed}
+.auth-back{width:100%;padding:10px;background:transparent;color:var(--t400);border:none;font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;margin-top:10px;transition:color .2s}
+.auth-back:hover{color:var(--g400)}
+.auth-code-row{display:flex;gap:10px;justify-content:center;margin:20px 0 16px}
+.auth-code-input{width:48px;height:56px;text-align:center;font-size:24px;font-weight:700;font-family:var(--sans);background:var(--d800);border:2px solid rgba(255,255,255,.08);border-radius:14px;color:var(--g400);outline:none;transition:all .2s;caret-color:var(--g400)}
+.auth-code-input:focus{border-color:rgba(34,197,94,.4);box-shadow:0 0 0 4px rgba(34,197,94,.08);background:rgba(34,197,94,.04)}
+.auth-sending{text-align:center;font-size:13px;color:var(--t400);margin-bottom:12px;animation:v-pulse 2s infinite}
+.auth-resend{width:100%;padding:10px;background:transparent;color:var(--g400);border:1px solid rgba(34,197,94,.15);border-radius:10px;font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;margin-top:8px;transition:all .2s}
+.auth-resend:hover:not(:disabled){background:rgba(34,197,94,.06);border-color:rgba(34,197,94,.25)}
+.auth-resend:disabled{opacity:.4;cursor:not-allowed}
+
 /* ── Responsive ─────────────────────── */
 @media(max-width:640px){
   .sp-logo-ring{width:130px;height:130px;border-radius:28px}
@@ -1276,6 +1490,11 @@ function RealtyAI() {
   .prop-action-btn{padding:6px 10px;font-size:10.5px}
   .prop-chips{gap:4px}
   .prop-chip{padding:5px 10px;font-size:10.5px}
+  .auth-modal{margin:12px}
+  .auth-header{padding:24px 20px 0}
+  .auth-body{padding:20px}
+  .auth-code-input{width:42px;height:50px;font-size:20px}
+  .auth-code-row{gap:6px}
 }
       `}</style>
     </div>
