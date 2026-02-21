@@ -1026,11 +1026,9 @@ function AuthScreen({ onVerified }) {
     setError('');
     try {
       await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-        to_email: toEmail,
-        to_name: toName,
-        verification_code: verCode,
-        from_name: 'Realty AI',
-        message: 'Your Realty AI verification code is: ' + verCode,
+        passcode: verCode,
+        time: '5:00',
+        email: toEmail,
       }, EMAILJS_PUBLIC_KEY);
       setSending(false);
     } catch (err) {
