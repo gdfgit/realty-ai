@@ -952,9 +952,9 @@ const EMAILJS_PUBLIC_KEY = 'gvXFv0nfSon2_uChv';
 function getRegisteredUsers() {
   try { return JSON.parse(localStorage.getItem('realty_ai_users') || '{}'); } catch { return {}; }
 }
-function saveUser(email, firstName, lastName) {
+function saveUser(email, firstName, lastName, phone) {
   const users = getRegisteredUsers();
-  users[email.toLowerCase()] = { firstName, lastName, email, registeredAt: new Date().toISOString() };
+  users[email.toLowerCase()] = { firstName, lastName, email, phone, registeredAt: new Date().toISOString() };
   localStorage.setItem('realty_ai_users', JSON.stringify(users));
 }
 function isUserRegistered(email) {
@@ -976,6 +976,7 @@ function AuthScreen({ onVerified }) {
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [sentCode, setSentCode] = useState('');
   const [error, setError] = useState('');
@@ -1009,18 +1010,19 @@ function AuthScreen({ onVerified }) {
     setError('');
     if (!firstName.trim()) { setError('Please enter your first name'); return; }
     if (!lastName.trim()) { setError('Please enter your last name'); return; }
+    if (!phone.trim() || phone.replace(/\D/g, '').length < 10) { setError('Please enter a valid phone number'); return; }
     setStep('consent');
   };
 
   const handleConsentAgree = () => {
     if (!consentChecked) return;
     // Save user and send code
-    saveUser(email.trim(), firstName.trim(), lastName.trim());
+    saveUser(email.trim(), firstName.trim(), lastName.trim(), phone.trim());
     const c = generateCode();
     setSentCode(c);
     sendVerificationEmail(email.trim(), firstName.trim(), c);
     // Notify agent of new lead
-    sendLeadNotification(email.trim(), firstName.trim(), lastName.trim());
+    sendLeadNotification(email.trim(), firstName.trim(), lastName.trim(), phone.trim());
     setStep('verify');
   };
 
@@ -1041,13 +1043,13 @@ function AuthScreen({ onVerified }) {
     }
   };
 
-  const sendLeadNotification = async (userEmail, fName, lName) => {
+  const sendLeadNotification = async (userEmail, fName, lName, userPhone) => {
     try {
       await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_LEAD_TEMPLATE_ID, {
         first_name: fName,
         last_name: lName,
         user_email: userEmail,
-        signup_date: new Date().toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' }),
+        user_phone: userPhone,
       }, EMAILJS_PUBLIC_KEY);
       console.log('Lead notification sent');
     } catch (err) {
@@ -1151,6 +1153,10 @@ function AuthScreen({ onVerified }) {
               <div className="auth-field">
                 <label>Last Name</label>
                 <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Last name" autoComplete="family-name" />
+              </div>
+              <div className="auth-field">
+                <label>Phone Number</label>
+                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="(555) 123-4567" autoComplete="tel" />
               </div>
               <div className="auth-field">
                 <label>Email Address</label>
