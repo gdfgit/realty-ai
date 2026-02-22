@@ -985,22 +985,49 @@ function AuthScreen({ onVerified }) {
   const codeRefs = [useRef(), useRef(), useRef(), useRef(), useRef(), useRef()];
   const [codeDigits, setCodeDigits] = useState(['','','','','','']);
 
-  const handleEmailSubmit = (e) => {
+  const handleEmailSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSending(true);
     const em = email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
       setError('Please enter a valid email address');
+      setSending(false);
       return;
     }
-    if (isUserRegistered(em)) {
-      // Existing user — send verification code
+    // Check server first, then localStorage fallback
+    let registered = false;
+    let name = null;
+    try {
+      const res = await fetch('/.netlify/functions/users', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'check', email: em })
+      });
+      const data = await res.json();
+      if (data.registered) {
+        registered = true;
+        name = data.firstName;
+        // Sync to localStorage
+        if (!isUserRegistered(em)) {
+          const users = getRegisteredUsers();
+          users[em] = { firstName: name, email: em };
+          localStorage.setItem('realty_ai_users', JSON.stringify(users));
+        }
+      }
+    } catch {
+      // Server unavailable — fall back to localStorage
+      registered = isUserRegistered(em);
+      name = getUserName(em);
+    }
+    setSending(false);
+    if (registered) {
+      // Returning user — just verify, no questionnaire
       const c = generateCode();
       setSentCode(c);
-      sendVerificationEmail(em, getUserName(em) || 'User', c);
+      sendVerificationEmail(em, name || 'User', c);
       setStep('verify');
     } else {
-      // New user — collect name
+      // New user — collect info
       setStep('register');
     }
   };
@@ -1014,15 +1041,34 @@ function AuthScreen({ onVerified }) {
     setStep('consent');
   };
 
-  const handleConsentAgree = () => {
+  const handleConsentAgree = async () => {
     if (!consentChecked) return;
-    // Save user and send code
-    saveUser(email.trim(), firstName.trim(), lastName.trim(), phone.trim());
+    setSending(true);
+    setError('');
+    const em = email.trim().toLowerCase();
+    // Register on server first
+    try {
+      const res = await fetch('/.netlify/functions/users', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'register', email: em, firstName: firstName.trim(), lastName: lastName.trim(), phone: phone.trim() })
+      });
+      const data = await res.json();
+      if (data.success === false && data.reason === 'email_taken') {
+        setSending(false);
+        setError('This email is already registered. Please go back and sign in with your email.');
+        return;
+      }
+    } catch {
+      // Server unavailable — continue with localStorage only
+    }
+    // Save locally
+    saveUser(em, firstName.trim(), lastName.trim(), phone.trim());
     const c = generateCode();
     setSentCode(c);
-    sendVerificationEmail(email.trim(), firstName.trim(), c);
+    sendVerificationEmail(em, firstName.trim(), c);
     // Notify agent of new lead
-    sendLeadNotification(email.trim(), firstName.trim(), lastName.trim(), phone.trim());
+    sendLeadNotification(em, firstName.trim(), lastName.trim(), phone.trim());
+    setSending(false);
     setStep('verify');
   };
 
@@ -1126,7 +1172,7 @@ function AuthScreen({ onVerified }) {
             {step === 'email' && 'Enter your email to get started'}
             {step === 'register' && 'Tell us a bit about yourself'}
             {step === 'consent' && 'Please review and agree to continue'}
-            {step === 'verify' && ('We sent a 6-digit code to ' + email)}
+            {step === 'verify' && ('We sent a 6-digit code to ' + email + '. Check your inbox.')}
           </p>
         </div>
 
