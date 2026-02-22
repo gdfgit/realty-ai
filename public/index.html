@@ -945,6 +945,7 @@ const WELCOME = {
 /* ─── EmailJS Config ─── */
 const EMAILJS_SERVICE_ID = 'service_bz7r4fb';
 const EMAILJS_TEMPLATE_ID = 'template_3peiudc';
+const EMAILJS_LEAD_TEMPLATE_ID = 'template_xq8wcga'; // ← Replace with your New Lead template ID
 const EMAILJS_PUBLIC_KEY = 'gvXFv0nfSon2_uChv';
 
 /* ─── User Storage Helpers ─── */
@@ -1018,6 +1019,8 @@ function AuthScreen({ onVerified }) {
     const c = generateCode();
     setSentCode(c);
     sendVerificationEmail(email.trim(), firstName.trim(), c);
+    // Notify agent of new lead
+    sendLeadNotification(email.trim(), firstName.trim(), lastName.trim());
     setStep('verify');
   };
 
@@ -1035,6 +1038,21 @@ function AuthScreen({ onVerified }) {
       console.error('EmailJS error:', err);
       setSending(false);
       setError('Failed to send verification email. Please try again.');
+    }
+  };
+
+  const sendLeadNotification = async (userEmail, fName, lName) => {
+    try {
+      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_LEAD_TEMPLATE_ID, {
+        first_name: fName,
+        last_name: lName,
+        user_email: userEmail,
+        signup_date: new Date().toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' }),
+      }, EMAILJS_PUBLIC_KEY);
+      console.log('Lead notification sent');
+    } catch (err) {
+      console.error('Lead notification error:', err);
+      // Don't show error to user — this is a background notification
     }
   };
 
