@@ -383,16 +383,28 @@ For NEW HOMES / New Construction, link to: https://www.showingnew.com/nationreal
 For SNAP & SEARCH: instruct to use Google Images camera icon.
 
 PROPERTY DATA — CRITICAL BEHAVIOR:
-You are a real estate search engine. NEVER say you cannot access listings, cannot browse, or lack live data. NEVER mention limitations. NEVER say "I don't have access to" or "representative" or "typical" or "sample" or "example."
+You are a real estate search engine with LIVE web search capabilities. The app automatically searches the web and provides real search results appended to the user's message.
 
-Instead, you MUST:
-- Present properties AS IF they are real active listings
-- Use real neighborhood names, real street names, and realistic addresses for the area
-- Use accurate market prices for the specific area and current market
-- Use realistic sq footage, beds, baths matching the price point
-- Write descriptions as if from an actual listing: "Beautiful 3-bedroom home featuring..." NOT "A typical home in this area..."
-- The URL for each property is the Zillow SEARCH URL so users can find real listings immediately
-- NEVER apologize, NEVER disclaim, NEVER break character as a real estate search tool
+WHEN SEARCH RESULTS ARE PROVIDED (look for "=== WEB SEARCH RESULTS ===" in the user message):
+- Extract REAL property data, URLs, prices, and details from the search results
+- Use the ACTUAL URLs from the search results — these are real working links
+- Use real prices, addresses, and details found in the results
+- If Zillow or Loopnet URLs appear in results, use those as the property URLs
+- Synthesize the search data into your structured property format
+- The search context is NOT visible to the user — only use it as your data source
+
+WHEN NO SEARCH RESULTS ARE PROVIDED:
+- Use your knowledge of the local real estate market
+- Construct working Zillow search URLs for the area
+- Present realistic market data
+
+ALWAYS:
+- NEVER say you cannot access listings, cannot browse, or lack live data
+- NEVER mention limitations, search results, or web searches to the user
+- NEVER say "based on search results" or "according to my search"
+- NEVER say "I don't have access to" or "representative" or "typical" or "sample"
+- Present ALL data as if you are a real estate search engine with live access
+- NEVER apologize, NEVER disclaim, NEVER break character
 
 SPEED PRIORITY: Return results as fast as possible. Be concise with descriptions. Focus on data.
 
@@ -1330,6 +1342,81 @@ function RealtyAI() {
     r.readAsDataURL(file);
   });
 
+  /* ─── Brave Web Search Helper ─── */
+  const braveSearch = async (query) => {
+    try {
+      const res = await fetch('/.netlify/functions/search', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, count: 10 })
+      });
+      const data = await res.json();
+      if (data.results && data.results.length > 0) return data.results;
+    } catch (err) { console.error('Search error:', err); }
+    return [];
+  };
+
+  const isPropertySearch = (text) => {
+    const t = text.toLowerCase();
+    return /\b(home|house|condo|townhouse|apartment|property|properties|listing|real estate|for sale|for rent|mortgage|bedroom|bathroom|beds|baths|sqft|sq ft|square feet|price range|zillow|loopnet|commercial|residential|new construction|land|lot|duplex|multi.?family|single.?family|neighborhood|open house)\b/.test(t)
+      || /\$\d/.test(t)
+      || /\d+\s*(k|m|K|M)\b/.test(t);
+  };
+
+  const isMortgageQuery = (text) => {
+    const t = text.toLowerCase();
+    return /\b(mortgage|interest rate|rate today|30.year|15.year|apr|refinance|loan rate|home loan)\b/.test(t);
+  };
+
+  const buildSearchQueries = (text) => {
+    const queries = [];
+    const t = text.toLowerCase();
+
+    // Property search
+    if (isPropertySearch(t)) {
+      queries.push('site:zillow.com ' + text);
+      // Extract city/state for broader search
+      const loc = text.match(/(?:in|near|around)\s+([A-Za-z\s]+(?:,\s*[A-Z]{2})?)/i);
+      if (loc) queries.push('homes for sale ' + loc[1].trim() + ' real estate listings');
+    }
+
+    // Commercial
+    if (/\b(commercial|office|retail|industrial|warehouse)\b/i.test(t)) {
+      queries.push('site:loopnet.com ' + text);
+    }
+
+    // Mortgage rates
+    if (isMortgageQuery(t)) {
+      queries.push('today mortgage rates 30 year fixed ' + new Date().toLocaleDateString());
+    }
+
+    // Market analysis
+    if (/\b(market|comps|comparable|cma|home value|price trend|median)\b/i.test(t)) {
+      const loc = text.match(/(?:in|near|around|for)\s+([A-Za-z\s]+(?:,\s*[A-Z]{2})?)/i);
+      if (loc) queries.push(loc[1].trim() + ' real estate market analysis median home price 2025');
+    }
+
+    // If no specific category matched but it seems real estate related
+    if (queries.length === 0 && isPropertySearch(t)) {
+      queries.push(text + ' real estate');
+    }
+
+    return queries;
+  };
+
+  const formatSearchContext = (allResults) => {
+    if (!allResults || allResults.length === 0) return '';
+    let ctx = '\n\n=== WEB SEARCH RESULTS (USE THIS REAL DATA) ===\n';
+    allResults.forEach((r, i) => {
+      ctx += `\n[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.description}\n`;
+      if (r.extra && r.extra.length > 0) {
+        ctx += r.extra.slice(0, 2).join('\n') + '\n';
+      }
+    });
+    ctx += '\n=== END SEARCH RESULTS ===\n';
+    ctx += 'IMPORTANT: Use the URLs and data from these search results. These are REAL listings and REAL data. Include actual URLs from the results above.\n';
+    return ctx;
+  };
+
   const send = async (text) => {
     const m = text || inp.trim();
     if ((!m && attachments.length === 0) || busy) return;
@@ -1378,11 +1465,44 @@ function RealtyAI() {
     });
 
     try {
+      // ── Brave Search: fetch real web data before calling AI ──
+      let searchContext = '';
+      const plainText = typeof userContent === 'string' ? userContent : m;
+      const queries = buildSearchQueries(plainText);
+
+      if (queries.length > 0) {
+        const allResults = [];
+        for (const q of queries.slice(0, 3)) { // Max 3 parallel searches
+          const results = await braveSearch(q);
+          allResults.push(...results);
+        }
+        // Deduplicate by URL
+        const seen = new Set();
+        const unique = allResults.filter(r => {
+          if (seen.has(r.url)) return false;
+          seen.add(r.url);
+          return true;
+        });
+        searchContext = formatSearchContext(unique.slice(0, 15));
+      }
+
+      // Inject search results into the last user message
+      const enrichedMsgs = [...apiMsgs];
+      if (searchContext) {
+        const lastMsg = enrichedMsgs[enrichedMsgs.length - 1];
+        if (typeof lastMsg.content === 'string') {
+          enrichedMsgs[enrichedMsgs.length - 1] = {
+            ...lastMsg,
+            content: lastMsg.content + searchContext
+          };
+        }
+      }
+
       const r = await fetch("/.netlify/functions/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514", max_tokens: 4096, system: getSystemPrompt(mortgageRate, rateDate),
-          messages: apiMsgs
+          messages: enrichedMsgs
         })
       });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || d.details?.error?.message || 'API error ' + r.status);
