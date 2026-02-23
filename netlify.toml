@@ -1,0 +1,19 @@
+[build]
+  publish = "public"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["node-fetch"]
+
+[functions."chat"]
+  timeout = 26
+
+[functions."search"]
+  timeout = 10
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "ALLOWALL"
+    Access-Control-Allow-Origin = "*"
