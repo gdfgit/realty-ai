@@ -389,66 +389,52 @@ USER STATUS:
 - Jump straight to helping them with real estate searches.
 - Be friendly and professional. Address them by name if provided.
 
-SEARCH BEHAVIOR — CRITICAL:
-You MUST construct REAL working search URLs. NEVER invent or fabricate individual property listing URLs.
+SEARCH BEHAVIOR — ZERO HALLUCINATION POLICY:
 
-For RESIDENTIAL: Build a Nation Realtor search URL using this format:
-https://nationrealtor.axenrealty.com/search?location=[city],[state-abbr]&minPrice=[minprice]&maxPrice=[maxprice]&beds=[beds]&baths=[baths]
+*** ABSOLUTE RULE: You must NEVER invent, fabricate, or guess any property address, price, beds, baths, sqft, or URL. ***
+*** Every single data point you present MUST come directly from the search results provided. ***
+*** If you cannot find specific listing data in search results, say so honestly and provide the Nation Realtor search link. ***
 
-Examples of REAL working URLs:
-- Los Angeles homes $300k-$500k: https://nationrealtor.axenrealty.com/search?location=Los+Angeles,CA&minPrice=300000&maxPrice=500000
-- Miami 3+ beds under $400k: https://nationrealtor.axenrealty.com/search?location=Miami,FL&maxPrice=400000&beds=3
-- Las Vegas 4bed 2bath $300k-$600k: https://nationrealtor.axenrealty.com/search?location=Las+Vegas,NV&minPrice=300000&maxPrice=600000&beds=4&baths=2
+HOW SEARCH WORKS:
+- The app searches the web AND nationrealtor.axenrealty.com automatically
+- Real search results are appended to user messages between === markers
+- This data is INVISIBLE to the user — use it as your data source
+- You must ONLY use addresses, prices, and details that appear in these results
 
-The URL field for EVERY property MUST use the Nation Realtor URL. This ensures users land on REAL listings.
+WHEN REAL LISTINGS ARE FOUND IN SEARCH RESULTS:
+- Extract the EXACT address, price, beds, baths, sqft from the results
+- Use the EXACT URL from the results if provided
+- If no direct URL, build: https://nationrealtor.axenrealty.com/search?location=[exact address from results]
+- Present each verified listing as a ---PROPERTY_START--- card
 
-For COMMERCIAL: Build a LoopNet search URL:
-https://www.loopnet.com/search/commercial-real-estate/[city]-[state-abbr]/for-sale/
+WHEN NO SPECIFIC LISTINGS ARE FOUND:
+- Do NOT make up addresses. Do NOT invent prices.
+- Instead, provide a search link card with the Nation Realtor search URL
+- Say: "I've set up a live search for [area/criteria]. Click View Full Listing to see current active listings."
+- You may include general market stats if they appear in search results (median price, inventory count, etc.)
+- Use TITLE: "Homes for Sale in [Area]" or "[Area] Real Estate Search"
 
-For NEW HOMES / New Construction, link to: https://www.showingnew.com/nationrealtor
-For SNAP & SEARCH: instruct to use Google Images camera icon.
+URL CONSTRUCTION:
+- Area search: https://nationrealtor.axenrealty.com/search?location=[City],[ST]&minPrice=[min]&maxPrice=[max]&beds=[beds]&baths=[baths]
+- Specific address: https://nationrealtor.axenrealty.com/search?location=[exact address from search results]
+- Commercial: https://www.loopnet.com/search/commercial-real-estate/[city]-[state]/for-sale/
+- New Construction: https://www.showingnew.com/nationrealtor
 
-PROPERTY DATA — ABSOLUTE RULES:
-You are a real estate search engine with LIVE web search. Real web results are appended to user messages between === LIVE WEB DATA === markers. This data is INVISIBLE to the user.
+FORBIDDEN — WILL BREAK THE APP:
+- NEVER invent a property address (e.g. "123 Oak Street") that is not in search results
+- NEVER guess prices, beds, baths, or sqft — only use verified data
+- NEVER say "I apologize", "I cannot access", "I don't have access", "representative", "typical", "sample"
+- NEVER respond to property queries with bullet point advice instead of property cards
+- NEVER suggest the user search elsewhere
+- NEVER say "I don't have photos" — give the property card and say "Click View Full Listing for photos"
 
-RULE 1 — USE SEARCH DATA:
-When search results are provided, extract and use the REAL data: addresses, prices, URLs, descriptions. If property details appear, use them. Always use nationrealtor.axenrealty.com URLs.
+PHOTO REQUESTS:
+When asked for photos of a property, respond with a ---PROPERTY_START--- card and say:
+"Here are the details for [address]. Click View Full Listing to see all photos, virtual tours, and floor plans on Nation Realtor."
 
-RULE 2 — SPECIFIC ADDRESS SEARCHES:
-When user asks about a specific address (e.g. "5555 Teco Ave Las Vegas"):
-- Look in search results for that address
-- If found: use REAL price, sqft, beds, baths, URL from the results
-- If NOT found: build a Nation Realtor URL like https://nationrealtor.axenrealty.com/search?location=5555+Teco+Ave,Las+Vegas,NV and present area market data
-- ALWAYS respond with a ---PROPERTY_START--- card
+EVERY property-related response MUST use ---PROPERTY_START--- cards. No exceptions.
 
-RULE 3 — AREA SEARCHES:
-When user asks for homes in an area (e.g. "homes in Las Vegas under $500k"):
-- Use search results for real listings with real URLs
-- Build Nation Realtor search URL: https://nationrealtor.axenrealty.com/search?location=Las+Vegas,NV&maxPrice=500000
-- Present 2-4 properties using the ---PROPERTY_START--- format
-
-RULE 4 — FORBIDDEN RESPONSES (WILL CAUSE APP TO BREAK):
-You must NEVER respond with ANY of these:
-- "I apologize" or "I'm sorry" or "I don't have access"
-- "I cannot access" or "I cannot find" or "I was unable to find"
-- "I don't have access to photos" or "I can't show photos" or "I don't have specific photos"
-- "representative" or "typical" or "sample"
-- "Best Options for Photos" or "Alternative Photo Sources"
-- Suggesting the user search on their own or click property links for photos
-- Bullet point lists of advice instead of property data
-- Any response to a property query that does NOT use ---PROPERTY_START--- format
-These responses BREAK the app. You MUST always use ---PROPERTY_START--- cards.
-
-RULE 5 — PHOTO AND MEDIA REQUESTS:
-When a user asks for photos or images of a property:
-- Respond with a ---PROPERTY_START--- card for the property with the Nation Realtor URL
-- Say something like "Here are the details for [address]. Click View Full Listing to see all photos, virtual tours, and floor plans."
-- NEVER say you don't have photos. NEVER list suggestions. Just give the property card.
-
-RULE 6 — ALWAYS PROPERTY CARDS:
-Every property query MUST be answered with ---PROPERTY_START--- cards. No exceptions. If you have incomplete data, fill in what you can and use the Nation Realtor URL for the user to see full details.
-
-SPEED PRIORITY: Be fast and concise. Focus on data, not conversation.
+SPEED PRIORITY: Be fast and concise. Focus on verified data only.
 
 MORTGAGE RATE:
 {{RATE_INJECTION}}
@@ -456,14 +442,14 @@ MORTGAGE RATE:
 CRITICAL OUTPUT FORMAT — You MUST use this EXACT format with these EXACT delimiters for each property. The app parses these tags to render Link Preview cards:
 
 ---PROPERTY_START---
-TITLE: [Real address from search results, or realistic address for area]
-URL: [Nation Realtor URL: https://nationrealtor.axenrealty.com/search?location=[address or city,state]&minPrice=[min]&maxPrice=[max] — always use nationrealtor.axenrealty.com]
-PRICE: $[realistic price for area]
-BEDS: [number]
-BATHS: [number]
-SQFT: [number]
+TITLE: [EXACT address from search results ONLY. If no specific listing found, use "Homes for Sale in [Area]" or "[Area] Real Estate Search"]
+URL: [EXACT listing URL from search results, OR constructed Nation Realtor search URL: https://nationrealtor.axenrealty.com/search?location=[city,ST]&minPrice=[min]&maxPrice=[max]]
+PRICE: $[EXACT price from search results ONLY. If no specific listing, use area median like "From $XXXk" based on search data, or leave as "See Listings"]
+BEDS: [from search results only, or leave empty]
+BATHS: [from search results only, or leave empty]
+SQFT: [from search results only, or leave empty]
 RATE: [mortgage rate]%
-DESCRIPTION: [Use description from search results if available. Otherwise write as real listing: "Stunning home featuring..." 1-2 sentences. NEVER say representative, typical, or sample.]
+DESCRIPTION: [EXACT description from search results. If no listing found, write: "View active listings in [area]. Click to see photos, details, and schedule tours on Nation Realtor."]
 IMG: [If image URLs ending in .jpg/.png/.webp are found in search results, include them. Otherwise leave empty.]
 AMENITIES: Restaurants|https://www.google.com/maps/search/restaurants+near+[encoded address],Schools|https://www.google.com/maps/search/schools+near+[encoded address],Hospitals|https://www.google.com/maps/search/hospitals+near+[encoded address],Gyms|https://www.google.com/maps/search/gyms+near+[encoded address],Parks|https://www.google.com/maps/search/parks+near+[encoded address],Assessor|https://www.google.com/maps/search/county+assessor+near+[encoded address],Map|https://www.google.com/maps/place/[encoded address]
 MORTGAGE_0: $[loan]|$[monthly at 0% down]
@@ -1494,11 +1480,11 @@ function RealtyAI() {
     r.readAsDataURL(file);
   });
 
-  /* ─── Brave Web Search Helper (with 4s timeout) ─── */
-  const braveSearch = async (query, wantImages) => {
+  /* ─── Tavily Web Search (with 5s timeout) ─── */
+  const tavilySearch = async (query, wantImages) => {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 4000);
+      const timeout = setTimeout(() => controller.abort(), 5000);
       const res = await fetch('/.netlify/functions/search', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query, count: 8, images: !!wantImages }),
@@ -1506,9 +1492,69 @@ function RealtyAI() {
       });
       clearTimeout(timeout);
       const data = await res.json();
-      return { results: data.results || [], images: data.images || [] };
-    } catch (err) { console.log('Search skipped:', err.name === 'AbortError' ? 'timeout' : err.message); }
-    return { results: [], images: [] };
+      return { results: data.results || [], images: data.images || [], answer: data.answer || '' };
+    } catch (err) { console.log('Tavily search skipped:', err.name === 'AbortError' ? 'timeout' : err.message); }
+    return { results: [], images: [], answer: '' };
+  };
+
+  /* ─── Nation Realtor Direct Fetch (with 5s timeout) ─── */
+  const fetchNationRealtor = async (params) => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch('/.netlify/functions/listings', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+      return await res.json();
+    } catch (err) { console.log('NationRealtor fetch skipped:', err.message); }
+    return { searchUrl: '', listings: [], extracted: {} };
+  };
+
+  /* ─── Build nationrealtor params from user query ─── */
+  const buildListingParams = (text) => {
+    const t = text.toLowerCase();
+    const params = {};
+
+    // Extract location (city, state, zip, or address)
+    const addrMatch = text.match(/\d+\s+[\w\s]+(?:St|Ave|Blvd|Rd|Dr|Ln|Ct|Way|Pl|Cir|Ter|Pkwy|Street|Avenue|Boulevard|Road|Drive|Lane|Court)[,.\s]*[\w\s]*,?\s*(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)?\s*\d{0,5}/i);
+    if (addrMatch) {
+      params.address = addrMatch[0].trim();
+      params.location = addrMatch[0].trim();
+    } else {
+      // Try city + state
+      const cityMatch = text.match(/([\w\s]+),?\s*(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\b/i);
+      if (cityMatch) params.location = cityMatch[1].trim() + ', ' + cityMatch[2].toUpperCase();
+      // Try zip
+      const zipMatch = text.match(/\b(\d{5})\b/);
+      if (zipMatch) params.location = zipMatch[1];
+    }
+
+    // Extract price range
+    const priceMatches = t.match(/\$?([\d,]+)\s*k?/g) || [];
+    const prices = priceMatches.map(p => {
+      let n = parseInt(p.replace(/[$,]/g, ''));
+      if (n < 10000) n *= 1000; // "500k" → 500000
+      return n;
+    }).filter(n => n >= 50000 && n <= 50000000);
+    if (prices.length === 1) {
+      if (/under|below|max|less/i.test(t)) params.maxPrice = prices[0];
+      else if (/over|above|min|more/i.test(t)) params.minPrice = prices[0];
+      else params.maxPrice = prices[0];
+    } else if (prices.length >= 2) {
+      params.minPrice = Math.min(...prices);
+      params.maxPrice = Math.max(...prices);
+    }
+
+    // Extract beds/baths
+    const bedsMatch = t.match(/(\d+)\s*(?:bed|br|bedroom)/);
+    if (bedsMatch) params.beds = bedsMatch[1];
+    const bathsMatch = t.match(/(\d+)\s*(?:bath|ba|bathroom)/);
+    if (bathsMatch) params.baths = bathsMatch[1];
+
+    return params;
   };
 
   const isPropertySearch = (text) => {
@@ -1554,24 +1600,85 @@ function RealtyAI() {
     return text + ' real estate';
   };
 
-  const formatSearchContext = (results, images) => {
-    if ((!results || results.length === 0) && (!images || images.length === 0)) return '';
-    let ctx = '\n\n=== LIVE WEB DATA ===\n';
-    (results || []).slice(0, 10).forEach((r, i) => {
-      ctx += `[${i + 1}] ${r.title}\nURL: ${r.url}\nInfo: ${r.description}\n`;
-      if (r.extra && r.extra.length > 0) {
-        ctx += 'Details: ' + r.extra.slice(0, 2).join(' | ') + '\n';
+  const formatSearchContext = (tavilyData, nrData, answer) => {
+    const results = tavilyData.results || [];
+    const images = tavilyData.images || [];
+    const nrListings = nrData.listings || [];
+    const nrExtracted = nrData.extracted || {};
+
+    if (results.length === 0 && nrListings.length === 0 && !answer && (nrExtracted.addresses || []).length === 0) return '';
+
+    let ctx = '\n\n=== LIVE WEB DATA (VERIFIED — USE ONLY THIS DATA) ===\n';
+    ctx += 'IMPORTANT: Only use addresses and prices that appear below. Do NOT invent any data.\n\n';
+
+    // Tavily answer summary
+    if (answer) {
+      ctx += 'MARKET SUMMARY: ' + answer + '\n\n';
+    }
+
+    // Nation Realtor listings (highest priority — real MLS data)
+    if (nrListings.length > 0) {
+      ctx += '--- VERIFIED NATION REALTOR LISTINGS ---\n';
+      nrListings.forEach((l, i) => {
+        ctx += 'LISTING ' + (i+1) + ':\n';
+        if (l.address) ctx += '  Address: ' + l.address + '\n';
+        if (l.title) ctx += '  Title: ' + l.title + '\n';
+        if (l.price) ctx += '  Price: $' + l.price + '\n';
+        if (l.beds) ctx += '  Beds: ' + l.beds + '\n';
+        if (l.baths) ctx += '  Baths: ' + l.baths + '\n';
+        if (l.sqft) ctx += '  SqFt: ' + l.sqft + '\n';
+        if (l.url) ctx += '  URL: ' + l.url + '\n';
+        if (l.image) ctx += '  Image: ' + l.image + '\n';
+        if (l.description) ctx += '  Description: ' + l.description + '\n';
+        ctx += '\n';
+      });
+    }
+
+    // Nation Realtor extracted data (addresses, prices from HTML)
+    if ((nrExtracted.addresses || []).length > 0) {
+      ctx += '--- ADDRESSES FOUND ON NATION REALTOR ---\n';
+      nrExtracted.addresses.forEach((a, i) => {
+        ctx += 'Address ' + (i+1) + ': ' + a + '\n';
+      });
+      if ((nrExtracted.prices || []).length > 0) {
+        ctx += 'Prices found: ' + nrExtracted.prices.join(', ') + '\n';
+      }
+      if ((nrExtracted.images || []).length > 0) {
+        ctx += 'Images found:\n';
+        nrExtracted.images.slice(0, 4).forEach((img, i) => {
+          ctx += '  IMG_' + (i+1) + ': ' + img + '\n';
+        });
+      }
+      if ((nrExtracted.listingUrls || []).length > 0) {
+        ctx += 'Listing URLs:\n';
+        nrExtracted.listingUrls.slice(0, 5).forEach((u, i) => {
+          ctx += '  ' + u + '\n';
+        });
       }
       ctx += '\n';
-    });
-    if (images && images.length > 0) {
-      ctx += '\nPROPERTY IMAGES FOUND:\n';
+    }
+
+    if (nrData.searchUrl) {
+      ctx += 'NATION REALTOR SEARCH URL: ' + nrData.searchUrl + '\n\n';
+    }
+
+    // Tavily web results
+    if (results.length > 0) {
+      ctx += '--- WEB SEARCH RESULTS ---\n';
+      results.slice(0, 8).forEach((r, i) => {
+        ctx += '[' + (i+1) + '] ' + r.title + '\nURL: ' + r.url + '\nInfo: ' + r.description + '\n\n';
+      });
+    }
+
+    // Images from Tavily
+    if (images.length > 0) {
+      ctx += '\nIMAGES FOUND:\n';
       images.slice(0, 4).forEach((img, i) => {
         ctx += 'IMG_' + (i+1) + ': ' + img.url + '\n';
       });
-      ctx += 'Use these image URLs in the IMG field of your ---PROPERTY_START--- response.\n';
     }
-    ctx += '=== END LIVE DATA. Respond ONLY with ---PROPERTY_START--- cards. ===\n';
+
+    ctx += '\n=== END LIVE DATA. Use ONLY verified data above. NEVER invent addresses or prices. ===\n';
     return ctx;
   };
 
@@ -1623,14 +1730,21 @@ function RealtyAI() {
     });
 
     try {
-      // ── Brave Search: always search for real data ──
+      // ── Dual Search: Tavily + Nation Realtor in parallel ──
       let searchContext = '';
       const plainText = typeof userContent === 'string' ? userContent : m;
       if (plainText && plainText.length > 2) {
         const sq = buildSearchQuery(plainText);
         const wantImages = /\b(photo|photos|image|images|picture|pictures|gallery|show me)\b/i.test(plainText) || isAddressSearch(plainText);
-        const { results, images } = await braveSearch(sq, wantImages);
-        searchContext = formatSearchContext(results, images);
+        const nrParams = buildListingParams(plainText);
+
+        // Run both searches in parallel for speed
+        const [tavilyData, nrData] = await Promise.all([
+          tavilySearch(sq, wantImages),
+          (nrParams.location || nrParams.address) ? fetchNationRealtor(nrParams) : Promise.resolve({ searchUrl: '', listings: [], extracted: {} }),
+        ]);
+
+        searchContext = formatSearchContext(tavilyData, nrData, tavilyData.answer || '');
       }
 
       // Inject search results into the last user message
