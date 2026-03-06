@@ -1,5 +1,5 @@
-// Netlify Serverless Function — Brave Search Proxy (Web + Images)
-const BRAVE_API_KEY = process.env.BRAVE_API_KEY;
+// Netlify Serverless Function — Tavily Search Proxy (Real Estate Focused)
+const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
 
 exports.handler = async (event) => {
   const headers = {
@@ -12,49 +12,62 @@ exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") return { statusCode: 204, headers, body: "" };
   if (event.httpMethod !== "POST") return { statusCode: 405, headers, body: JSON.stringify({ error: "Method not allowed" }) };
 
-  const apiKey = BRAVE_API_KEY;
-  if (!apiKey) return { statusCode: 500, headers, body: JSON.stringify({ error: "BRAVE_API_KEY not set" }) };
+  if (!TAVILY_API_KEY) return { statusCode: 500, headers, body: JSON.stringify({ error: "TAVILY_API_KEY not set" }) };
 
   try {
     const body = JSON.parse(event.body);
     const query = body.query;
-    const count = Math.min(body.count || 8, 15);
+    const maxResults = Math.min(body.count || 8, 10);
     const wantImages = body.images || false;
 
     if (!query) return { statusCode: 400, headers, body: JSON.stringify({ error: "Query required" }) };
 
-    // Web search
-    const webUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${count}&extra_snippets=true&result_filter=web`;
-    const webRes = await fetch(webUrl, {
-      headers: { "Accept": "application/json", "Accept-Encoding": "gzip", "X-Subscription-Token": apiKey },
-    });
-    const webData = await webRes.json();
+    // Use advanced search for better property data extraction
+    const tavilyBody = {
+      api_key: TAVILY_API_KEY,
+      query: query,
+      search_depth: "advanced",
+      include_answer: true,
+      include_images: wantImages,
+      include_raw_content: false,
+      max_results: maxResults,
+    };
 
-    const results = (webData.web?.results || []).map(r => ({
-      title: r.title || '', url: r.url || '', description: r.description || '',
-      age: r.age || '', extra: r.extra_snippets || [],
+    const res = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(tavilyBody),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      return { statusCode: res.status, headers, body: JSON.stringify({ error: data.detail || data.message || "Search failed" }) };
+    }
+
+    const results = (data.results || []).map(r => ({
+      title: r.title || "",
+      url: r.url || "",
+      description: r.content || "",
+      score: r.score || 0,
+      extra: [],
     }));
 
-    // Image search (when requested)
-    let images = [];
-    if (wantImages) {
-      try {
-        const imgUrl = `https://api.search.brave.com/res/v1/images/search?q=${encodeURIComponent(query)}&count=6`;
-        const imgRes = await fetch(imgUrl, {
-          headers: { "Accept": "application/json", "Accept-Encoding": "gzip", "X-Subscription-Token": apiKey },
-        });
-        const imgData = await imgRes.json();
-        images = (imgData.results || []).map(r => ({
-          url: r.properties?.url || r.thumbnail?.src || '',
-          title: r.title || '',
-          source: r.source || '',
-        })).filter(img => img.url && img.url.startsWith('http'));
-      } catch (e) { /* image search optional */ }
-    }
+    const images = (data.images || []).map(url => ({
+      url: typeof url === "string" ? url : (url.url || ""),
+      title: "",
+      source: "",
+    })).filter(img => img.url && img.url.startsWith("http"));
 
     return {
       statusCode: 200, headers,
-      body: JSON.stringify({ query, count: results.length, results, images }),
+      body: JSON.stringify({
+        query,
+        count: results.length,
+        results,
+        images,
+        answer: data.answer || "",
+      }),
     };
   } catch (err) {
     return { statusCode: 500, headers, body: JSON.stringify({ error: "Search error: " + err.message }) };
