@@ -640,61 +640,58 @@ function PropMedia({ images, videos, youtubeUrls, title }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [loadErrors, setLoadErrors] = useState({});
 
-  const validImages = (images || []).filter(u =>
-    u && u.startsWith('http') && (
-      /\.(jpg|jpeg|png|webp|gif|avif)/i.test(u) ||
-      /images\\.unsplash|\\.cloudfront\\.net|\\.amazonaws\\.com|axenrealty\\.com|photos\\.zillowstatic|ssl\\.cdn-redfin|ap\\.rdcpix/i.test(u)
-    )
-  );
+  const validImages = (images || []).filter(function(u) {
+    if (!u || !u.startsWith('http')) return false;
+    if (/\.(jpg|jpeg|png|webp|gif|avif)/i.test(u)) return true;
+    if (/images\.unsplash|cloudfront\.net|amazonaws\.com|axenrealty|zillowstatic|cdn-redfin|rdcpix/i.test(u)) return true;
+    return false;
+  });
 
-  const validVideos = (videos || []).filter(u =>
-    u && u.startsWith('http') && /\.(mp4|webm|mov)/i.test(u)
-  );
-
-  // Parse YouTube IDs
-  const ytEmbeds = (youtubeUrls || []).map(u => {
-    const m = u.match(/(?:youtube\\.com\\/watch\\?v=|youtu\\.be\\/|youtube\\.com\\/embed\\/)([-\\w]+)/);
+  const ytIds = (youtubeUrls || []).map(function(u) {
+    var m = u.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([A-Za-z0-9_-]+)/);
     return m ? m[1] : null;
   }).filter(Boolean);
 
-  const allMedia = [
-    ...validImages.map(u => ({ type: 'image', url: u })),
-    ...validVideos.map(u => ({ type: 'video', url: u })),
-    ...ytEmbeds.map(id => ({ type: 'youtube', id: id })),
-  ];
+  var allMedia = [];
+  validImages.forEach(function(u) { allMedia.push({ type: 'image', url: u }); });
+  ytIds.forEach(function(id) { allMedia.push({ type: 'youtube', id: id }); });
 
-  const visibleMedia = allMedia.filter((_, i) => !loadErrors[i]);
+  var visibleMedia = allMedia.filter(function(_, i) { return !loadErrors[i]; });
   if (visibleMedia.length === 0) return null;
 
-  const currentItem = visibleMedia[activeIdx] || visibleMedia[0];
+  var currentItem = visibleMedia[activeIdx] || visibleMedia[0];
+
+  var mainContent = null;
+  if (currentItem && currentItem.type === 'image') {
+    mainContent = <img src={currentItem.url} alt={title || ''} className="prop-media-img" onError={function() { setLoadErrors(function(e) { var n = Object.assign({}, e); n[activeIdx] = true; return n; }); }} />;
+  } else if (currentItem && currentItem.type === 'youtube') {
+    mainContent = <iframe src={'https://www.youtube.com/embed/' + currentItem.id} className="prop-media-yt" title="Property Video" frameBorder="0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowFullScreen={true} />;
+  }
 
   return (
     <div className="prop-media">
       <div className="prop-media-main">
-        {currentItem?.type === 'image' ? (
-          <img src={currentItem.url} alt={title} className="prop-media-img" onError={() => setLoadErrors(e => ({ ...e, [activeIdx]: true }))} />
-        ) : currentItem?.type === 'video' ? (
-          <video src={currentItem.url} controls className="prop-media-vid" onError={() => setLoadErrors(e => ({ ...e, [activeIdx]: true }))} />
-        ) : currentItem?.type === 'youtube' ? (
-          <iframe src={`https://www.youtube.com/embed/${currentItem.id}`} className="prop-media-yt" title="Property Video" frameBorder="0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowFullScreen />
-        ) : null}
+        {mainContent}
       </div>
       {visibleMedia.length > 1 && (
         <div className="prop-media-thumbs">
-          {visibleMedia.map((m, i) => (
-            <div key={i} className={`prop-media-thumb ${i === activeIdx ? 'active' : ''}`} onClick={() => setActiveIdx(i)}>
-              {m.type === 'image' ? (
-                <img src={m.url} alt="" onError={e => e.target.parentElement.style.display='none'} />
-              ) : (
-                <div className="prop-thumb-vid">{m.type === 'youtube' ? '▶' : '🎬'}</div>
-              )}
-            </div>
-          ))}
+          {visibleMedia.map(function(m, i) {
+            return (
+              <div key={i} className={'prop-media-thumb' + (i === activeIdx ? ' active' : '')} onClick={function() { setActiveIdx(i); }}>
+                {m.type === 'image' ? (
+                  <img src={m.url} alt="" onError={function(e) { e.target.parentElement.style.display='none'; }} />
+                ) : (
+                  <div className="prop-thumb-vid">▶</div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
+
 
 /* ─── Property Link Preview Card ─── */
 function PropertyCard({ prop, idx, onNewChat, onBrowse }) {
