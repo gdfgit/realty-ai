@@ -12,6 +12,9 @@
 [functions."search"]
   timeout = 10
 
+[functions."listings"]
+  timeout = 10
+
 [[headers]]
   for = "/*"
   [headers.values]
