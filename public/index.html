@@ -420,11 +420,11 @@ Search data (from the web) is appended to user messages between === VERIFIED PRO
 
 YOUR ONLY OUTPUT FORMAT for property queries:
 
-SEARCH_URL: https://nationrealtor.axenrealty.com/search?q=[terms+with+plus]
+SEARCH_URL: [URL from search results that best matches the query]
 
 ---PROPERTY_START---
 TITLE: [address from search data]
-URL: https://nationrealtor.axenrealty.com/search?q=[address+city+state+zip]
+URL: [Use the actual URL from search results — Redfin, Zillow, Realtor.com, etc. Use the real listing page URL.]
 PRICE: $[price from data]
 BEDS: [number only]
 BATHS: [number only]
@@ -450,13 +450,14 @@ Mortgage: monthly = (loan * r/12) / (1-(1+r/12)^-360). At 6.14%, $500k = $3,042/
 
 RULES:
 1. ALWAYS use ---PROPERTY_START--- cards. NEVER bullet points or plain text for properties.
-2. Even with partial data, output a card. Even with no data, output a card with nationrealtor URL.
+2. Even with partial data, output a card. Even with no data, output a card.
 3. BEDS/BATHS/SQFT = numbers only. Never "bd" or "ba".
 4. Extract REAL data from search results. Never invent addresses or prices.
-5. NEVER say "I apologize", "let me search", or output XML tags.
-6. Show up to 4 cards for area searches.
-7. Commercial: https://www.loopnet.com/search/commercial-real-estate/[city]-[state]/for-sale/
-8. New construction: https://www.showingnew.com/nationrealtor
+5. URL field = the REAL listing page URL from search results (Redfin, Zillow, Realtor.com, etc.)
+6. NEVER say "I apologize", "let me search", or output XML tags.
+7. Show up to 4 cards for area searches.
+8. Commercial: https://www.loopnet.com/search/commercial-real-estate/[city]-[state]/for-sale/
+9. New construction: https://www.showingnew.com/nationrealtor
 
 {{RATE_INJECTION}}`;
 
@@ -533,14 +534,9 @@ function parseProperties(text) {
     var title = g('TITLE');
     var url = g('URL');
 
-    // Force nationrealtor URL from title if AI got it wrong
-    if (title && /\d+\s+\w/.test(title)) {
-      if (!url || !url.includes('nationrealtor')) {
-        url = 'https://nationrealtor.axenrealty.com/search?q=' + encodeURIComponent(title);
-      }
-    }
+    // If no URL, build a Google search as fallback
     if (!url || !url.startsWith('http')) {
-      url = 'https://nationrealtor.axenrealty.com/search?q=' + encodeURIComponent(title || 'homes for sale');
+      url = 'https://www.google.com/search?q=' + encodeURIComponent((title || 'homes for sale') + ' real estate listing');
     }
 
     var amenities = g('AMENITIES').split(',').filter(Boolean).map(function(a) {
@@ -1068,7 +1064,7 @@ function RealtyAI() {
       ctx += 'IMAGES:\n';
       data.images.slice(0, 4).forEach(function(img, i) { ctx += 'IMG_' + (i+1) + ': ' + img + '\n'; });
     }
-    ctx += '\nURL RULE: Use https://nationrealtor.axenrealty.com/search?q=[address] for all property URLs.\n';
+    ctx += '\nURL RULE: Use the ACTUAL listing URL from search results (Redfin, Zillow, Realtor.com etc.) for the URL field.\n';
     ctx += '=== END DATA ===\n';
     return ctx;
   };
@@ -1137,7 +1133,7 @@ function RealtyAI() {
       // ── STEP 2: Inject search data into user message ──
       var context = formatContext(searchData);
       if (!context && plainText) {
-        context = '\n\n=== VERIFIED PROPERTY DATA ===\nNo specific results found. Create a property card with a search link.\nURL: https://nationrealtor.axenrealty.com/search?q=' + encodeURIComponent(plainText) + '\n=== END DATA ===\n';
+        context = '\n\n=== VERIFIED PROPERTY DATA ===\nNo specific results found. Create a property card with a Google search link.\nURL: https://www.google.com/search?q=' + encodeURIComponent(plainText + ' homes for sale') + '\n=== END DATA ===\n';
       }
 
       var enrichedMsgs = apiMsgs.map(function(x) { return Object.assign({}, x); });
@@ -1177,7 +1173,7 @@ function RealtyAI() {
           if (extractSqft) extractSqft = extractSqft.replace(/,/g, '');
           var extractAddr = (res.match(/\d+\s+[\w\s]+(?:St|Ave|Blvd|Rd|Dr|Ln|Ct|Way|Pl|Ter|Pkwy)[,.\s]+[\w\s]+,\s*[A-Z]{2}\s+\d{5}/i) || [])[0] || '';
           var cardTitle = extractAddr || plainText.trim();
-          var cardUrl = 'https://nationrealtor.axenrealty.com/search?q=' + encodeURIComponent(cardTitle);
+          var cardUrl = (searchData && searchData.results && searchData.results[0]) ? searchData.results[0].url : 'https://www.google.com/search?q=' + encodeURIComponent(cardTitle + ' for sale');
           var rate = mortgageRate || '6.5';
 
           // Calculate mortgage if we have a price
