@@ -416,48 +416,48 @@ function canIframe(url) {
 
 const SYSTEM_PROMPT = `You are Realty AI. User is verified — respond immediately.
 
-Search data (from the web) is appended to user messages between === VERIFIED PROPERTY DATA === and === END DATA ===. You have NO search tools. NEVER output <search> tags. READ the data and respond.
+Search data is appended between === VERIFIED PROPERTY DATA === and === END DATA ===.
+You have NO search tools. NEVER output <search> tags. READ the provided data and respond.
 
-YOUR ONLY OUTPUT FORMAT for property queries:
+OUTPUT FORMAT — MANDATORY for all property queries:
 
-SEARCH_URL: [URL from search results that best matches the query]
+SEARCH_URL: https://nationrealtor.axenrealty.com/search?q=[search+terms]
 
 ---PROPERTY_START---
-TITLE: [address from search data]
-URL: [Use the actual URL from search results — Redfin, Zillow, Realtor.com, etc. Use the real listing page URL.]
-PRICE: $[price from data]
+TITLE: [exact address from search data]
+URL: https://nationrealtor.axenrealty.com/search?q=[address+city+state+zip]
+PRICE: $[price from search data]
 BEDS: [number only]
 BATHS: [number only]
 SQFT: [number only]
 RATE: {{RATE}}%
-DESCRIPTION: [1-2 sentences from data]
-IMG: [image URLs if found, comma separated]
+DESCRIPTION: [1-2 sentences from search data]
+IMG: [image URLs from search data if any, comma separated]
 AMENITIES: Restaurants|https://www.google.com/maps/search/restaurants+near+[addr],Schools|https://www.google.com/maps/search/schools+near+[addr],Hospitals|https://www.google.com/maps/search/hospitals+near+[addr],Gyms|https://www.google.com/maps/search/gyms+near+[addr],Parks|https://www.google.com/maps/search/parks+near+[addr],Assessor|https://www.google.com/maps/search/county+assessor+near+[addr],Map|https://www.google.com/maps/place/[addr]
-MORTGAGE_0: $[price]|$[monthly at rate]
+MORTGAGE_0: $[price]|$[monthly]
 MORTGAGE_5: $[price*0.95]|$[monthly]
 MORTGAGE_10: $[price*0.90]|$[monthly]
 MORTGAGE_20: $[price*0.80]|$[monthly]
-CMA_COMPS: $[comp avg]
+CMA_COMPS: $[avg nearby price]
 CMA_SQFT: $[price/sqft]
-CMA_ASKING: $[price]
-CMA_TRIGGER: $[offer price]
-TRIGGER_LOW: $[low]|$[total]|Many|High
-TRIGGER_MID: $[mid]|$[total]|Moderate|Medium
-TRIGGER_HIGH: $[high]|$[total]|Few|Low
+CMA_ASKING: $[asking price]
+CMA_TRIGGER: $[recommended offer]
+TRIGGER_LOW: $[low $/sqft]|$[total]|Many|High
+TRIGGER_MID: $[mid $/sqft]|$[total]|Moderate|Medium
+TRIGGER_HIGH: $[high $/sqft]|$[total]|Few|Low
 ---PROPERTY_END---
 
-Mortgage: monthly = (loan * r/12) / (1-(1+r/12)^-360). At 6.14%, $500k = $3,042/mo.
+Mortgage: monthly = (loan*r/12)/(1-(1+r/12)^-360). At 6.14%, $500k=$3,042/mo.
 
 RULES:
-1. ALWAYS use ---PROPERTY_START--- cards. NEVER bullet points or plain text for properties.
-2. Even with partial data, output a card. Even with no data, output a card.
-3. BEDS/BATHS/SQFT = numbers only. Never "bd" or "ba".
-4. Extract REAL data from search results. Never invent addresses or prices.
-5. URL field = the REAL listing page URL from search results (Redfin, Zillow, Realtor.com, etc.)
+1. ALWAYS use ---PROPERTY_START--- cards. NEVER bullet points or plain text.
+2. Even with partial data, output a card. Even with NO data, output a card with the search URL.
+3. BEDS/BATHS/SQFT = numbers only.
+4. Extract REAL data from search results. Never invent.
+5. ALL property URLs use: https://nationrealtor.axenrealty.com/search?q=[address]
 6. NEVER say "I apologize", "let me search", or output XML tags.
 7. Show up to 4 cards for area searches.
-8. Commercial: https://www.loopnet.com/search/commercial-real-estate/[city]-[state]/for-sale/
-9. New construction: https://www.showingnew.com/nationrealtor
+8. Calculate mortgages using the rate. Never show $0.
 
 {{RATE_INJECTION}}`;
 
@@ -534,9 +534,9 @@ function parseProperties(text) {
     var title = g('TITLE');
     var url = g('URL');
 
-    // If no URL, build a Google search as fallback
-    if (!url || !url.startsWith('http')) {
-      url = 'https://www.google.com/search?q=' + encodeURIComponent((title || 'homes for sale') + ' real estate listing');
+    // If no URL or URL is generic Google, use nationrealtor as the listing viewer
+    if (!url || !url.startsWith('http') || url.includes('google.com/search')) {
+      url = 'https://nationrealtor.axenrealty.com/search?q=' + encodeURIComponent(title || 'homes for sale');
     }
 
     var amenities = g('AMENITIES').split(',').filter(Boolean).map(function(a) {
@@ -845,18 +845,18 @@ function Msg({ message, onNew, onBrowse, idx }) {
    QUICK ACTIONS
    ═══════════════════════════════════════════════════════ */
 
-function QuickActions({ onAction, ok }) {
+function QuickActions({ onAction, onBrowse, ok }) {
   if (!ok) return null;
   var actions = [
-    { icon: '🏠', label: 'Search Homes', msg: 'Search for homes in Las Vegas, NV' },
-    { icon: '🏢', label: 'Commercial', msg: 'Show me commercial properties for sale in Las Vegas' },
-    { icon: '🏗️', label: 'New Construction', msg: 'Show me new construction homes' },
+    { icon: '🏠', label: 'Search Homes', url: 'https://nationrealtor.axenrealty.com/search' },
+    { icon: '🏢', label: 'Commercial', url: 'https://www.loopnet.com/search/commercial-real-estate/for-sale/' },
+    { icon: '🏗️', label: 'New Construction', url: 'https://www.showingnew.com/nationrealtor' },
     { icon: '📸', label: 'Snap & Search', msg: 'How do I use Snap & Search to find a property?' },
   ];
   return (
     <div className="quick-bar">
       {actions.map(function(a, i) {
-        return <button key={i} className="quick-btn" onClick={function() { onAction(a.msg); }}><span>{a.icon}</span><span>{a.label}</span></button>;
+        return <button key={i} className="quick-btn" onClick={function() { if (a.url) { onBrowse(a.url); } else { onAction(a.msg); } }}><span>{a.icon}</span><span>{a.label}</span></button>;
       })}
     </div>
   );
@@ -1064,7 +1064,7 @@ function RealtyAI() {
       ctx += 'IMAGES:\n';
       data.images.slice(0, 4).forEach(function(img, i) { ctx += 'IMG_' + (i+1) + ': ' + img + '\n'; });
     }
-    ctx += '\nURL RULE: Use the ACTUAL listing URL from search results (Redfin, Zillow, Realtor.com etc.) for the URL field.\n';
+    ctx += '\nURL RULE: ALWAYS use https://nationrealtor.axenrealty.com/search?q=[address] for the URL field. This is the MLS listing viewer.\n';
     ctx += '=== END DATA ===\n';
     return ctx;
   };
@@ -1133,7 +1133,7 @@ function RealtyAI() {
       // ── STEP 2: Inject search data into user message ──
       var context = formatContext(searchData);
       if (!context && plainText) {
-        context = '\n\n=== VERIFIED PROPERTY DATA ===\nNo specific results found. Create a property card with a Google search link.\nURL: https://www.google.com/search?q=' + encodeURIComponent(plainText + ' homes for sale') + '\n=== END DATA ===\n';
+        context = '\n\n=== VERIFIED PROPERTY DATA ===\nNo specific listings found. Create a property card with this search URL: https://nationrealtor.axenrealty.com/search?q=' + encodeURIComponent(plainText) + '\n=== END DATA ===\n';
       }
 
       var enrichedMsgs = apiMsgs.map(function(x) { return Object.assign({}, x); });
@@ -1173,7 +1173,7 @@ function RealtyAI() {
           if (extractSqft) extractSqft = extractSqft.replace(/,/g, '');
           var extractAddr = (res.match(/\d+\s+[\w\s]+(?:St|Ave|Blvd|Rd|Dr|Ln|Ct|Way|Pl|Ter|Pkwy)[,.\s]+[\w\s]+,\s*[A-Z]{2}\s+\d{5}/i) || [])[0] || '';
           var cardTitle = extractAddr || plainText.trim();
-          var cardUrl = (searchData && searchData.results && searchData.results[0]) ? searchData.results[0].url : 'https://www.google.com/search?q=' + encodeURIComponent(cardTitle + ' for sale');
+          var cardUrl = 'https://nationrealtor.axenrealty.com/search?q=' + encodeURIComponent(cardTitle);
           var rate = mortgageRate || '6.5';
 
           // Calculate mortgage if we have a price
@@ -1277,7 +1277,7 @@ function RealtyAI() {
         <div ref={endRef} />
       </div>
 
-      <QuickActions onAction={send} ok={msgs.length <= 1 && !busy} />
+      <QuickActions onAction={send} onBrowse={handleBrowse} ok={msgs.length <= 1 && !busy} />
 
       <div className="input-bar">
         <button className="attach-btn" onClick={function() { fileRef.current && fileRef.current.click(); }}>+</button>
