@@ -41,7 +41,7 @@ exports.handler = async (event) => {
   try {
     const body = JSON.parse(event.body);
     const requestBody = {
-      model: body.model || "claude-sonnet-4-20250514",
+      model: body.model || "claude-opus-4-6",
       max_tokens: body.max_tokens || 4096,
       system: body.system || "",
       messages: body.messages || [],
@@ -74,3 +74,4 @@ exports.handler = async (event) => {
     return { statusCode: 500, headers, body: JSON.stringify({ error: "Server error: " + err.message }) };
   }
 };
+
